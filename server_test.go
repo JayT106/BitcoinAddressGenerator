@@ -14,63 +14,47 @@ import (
 )
 
 func TestHTTPServerGetServerPublicKeys(t *testing.T) {
-	resp, err := http.Get("http://localhost:8080/v1/serverPublicKeys")
-	if err != nil {
-		t.Error(err)
-	}
-
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Error(err)
-	}
-
-	var rsp map[string]string
-	err = json.Unmarshal(body, &rsp)
-	if err != nil {
-		t.Error(err)
-	}
-
-	channelPubKeyServerString := rsp["publicKey"]
-	bs, err := hex.DecodeString(channelPubKeyServerString)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// Verifying the receiving data is a ecdsa publicKey
-	_, err = btcec.ParsePubKey(bs, btcec.S256())
+	_, err := GetServerPublicKey()
 	if err != nil {
 		t.Error(err)
 	}
 }
 
-func TestHTTPServerGenPublicKeyAndSegWitAddress(t *testing.T) {
-	// Reuse the test case, should refactor it in the next commit
+func GetServerPublicKey() (*btcec.PublicKey, error) {
 	resp, err := http.Get("http://localhost:8080/v1/serverPublicKeys")
 	if err != nil {
-		t.Error(err)
+		return nil, err
 	}
 
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		t.Error(err)
+		return nil, err
 	}
 
 	var rsp map[string]string
 	err = json.Unmarshal(body, &rsp)
 	if err != nil {
-		t.Error(err)
+		return nil, err
 	}
 
-	channelPubKeyServer := rsp["publicKey"]
-	bs, err := hex.DecodeString(channelPubKeyServer)
+	channelPubKeyServerString := rsp["publicKey"]
+	bs, err := hex.DecodeString(channelPubKeyServerString)
 	if err != nil {
-		t.Error(err)
+		return nil, err
 	}
 
 	// Verifying the receiving data is a ecdsa publicKey
-	serverPubECKey, err := btcec.ParsePubKey(bs, btcec.S256())
+	pubKey, err := btcec.ParsePubKey(bs, btcec.S256())
+	if err != nil {
+		return nil, err
+	}
+
+	return pubKey, err
+}
+
+func TestHTTPServerGenPublicKeyAndSegWitAddress(t *testing.T) {
+	serverPubECKey, err := GetServerPublicKey()
 	if err != nil {
 		t.Error(err)
 	}
@@ -114,13 +98,13 @@ func TestHTTPServerGenPublicKeyAndSegWitAddress(t *testing.T) {
 		t.Error(err)
 	}
 
-	resp, err = client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		t.Error(err)
 	}
 
 	defer resp.Body.Close()
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Error(err)
 	}
@@ -130,6 +114,7 @@ func TestHTTPServerGenPublicKeyAndSegWitAddress(t *testing.T) {
 		t.Error(err)
 	}
 
+	var rsp map[string]string
 	err = json.Unmarshal(*plaintext, &rsp)
 	if err != nil {
 		t.Error(err)
