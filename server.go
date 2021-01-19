@@ -4,9 +4,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcutil/hdkeychain"
+	"github.com/jayt106/bitcoinAddressGenerator/cipher"
+	"io/ioutil"
 	"log"
 	"net/http"
 )
+
 func main() {
 
 	// Generate the key for the data encrypt/decrypt during the message passing
@@ -21,6 +27,10 @@ func main() {
 	//Handling the /v1/serverPublicKeys.
 	pubkh := &PubKeyHandler{privKey.PubKey()}
 	mux.Handle("/v1/serverPublicKeys", pubkh)
+
+	//Handling the /v1/genPublicKeyAndSegWitAddress.
+	privkh := &PrivKeyHandler{privKey}
+	mux.Handle("/v1/genPublicKeyAndSegWitAddress", privkh)
 
 	//Create the http server.
 	s := &http.Server{
@@ -57,5 +67,170 @@ func (ph *PubKeyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println("ServeHTTP write error:", err)
 	}
+}
+
+type PrivKeyHandler struct {
+	privKey *btcec.PrivateKey
+}
+
+// ServeHTTP handle the V1/genPublicKeyAndSegWitAddress API request.
+// The http client send the seed, path and the public key(for the return message encryption) encrypted by the server's public key
+// (See V1/serverPublicKeys API). This function decrypted the message by the server's private key, generate the HD key base on the
+// seed and the path and return the public key and the SegWit address encrypted by the client's public key.
+func (ph *PrivKeyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		ServerErrorHandle(w, err, "Read body error:")
+		return
+	}
+
+	msgParam := make(map[string]string)
+	err = json.Unmarshal(body, &msgParam)
+	if err != nil {
+		ServerErrorHandle(w, err, "Json unmarshal error:")
+		return
+	}
+
+	cipherBytes, err := hex.DecodeString(msgParam["data"])
+	if err != nil {
+		ServerErrorHandle(w, err, "Hex decode string error:")
+		return
+	}
+
+	plainBytes, err := cipher.MessageDecrypt(ph.privKey, &cipherBytes)
+	if err != nil {
+		ServerErrorHandle(w, err, "Decrypt data error:")
+		return
+	}
+
+	slice := *plainBytes
+	clientCipherPublicKey := slice[:btcec.PubKeyBytesLenCompressed]
+	keyPath := slice[btcec.PubKeyBytesLenCompressed:]
+	Clear(plainBytes)
+	Clear(&slice)
+
+	var keyParam BIP32PARAM
+	err = json.Unmarshal(keyPath, &keyParam)
+	Clear(&keyPath)
+	if err != nil {
+		ServerErrorHandle(w, err, "Unmarshal data error:")
+		return
+	}
+
+	// Generate a HD key chain (Bitcoin mainnet) using the seed.
+	clientHDPubKey, err := GenerateHDPublicKey(&keyParam)
+	Clear(&keyParam)
+	if err != nil {
+		ServerErrorHandle(w, err, "Generate HD public key failed:")
+		return
+	}
+
+	compressedPubKey, err := ConvertPublicKey(clientHDPubKey)
+	if err != nil {
+		ServerErrorHandle(w, err, "Convert HD public key failed:")
+		return
+	}
+
+	segwitAddress, err := GenerateSegwitAddress(compressedPubKey)
+	if err != nil {
+		ServerErrorHandle(w, err, "Generate segwit address failed:")
+		return
+	}
+
+	resp := make(map[string]string)
+	resp["publicKey"] = hex.EncodeToString(*compressedPubKey)
+	resp["segwitAddress"] = *segwitAddress
+
+	marshalledData, err := json.Marshal(resp)
+	if err != nil {
+		ServerErrorHandle(w, err, "Json Marshal error:")
+		return
+	}
+
+	pubKey, err := btcec.ParsePubKey(clientCipherPublicKey, btcec.S256())
+	if err != nil {
+		ServerErrorHandle(w, err, "ParsePubKey error:")
+		return
+	}
+
+	cipherText, err := cipher.MessageEncrypt(pubKey, &marshalledData)
+	if err != nil {
+		ServerErrorHandle(w, err, "MessageEncrypt error:")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err = w.Write(*cipherText)
+	if err != nil {
+		log.Println("ServeHTTP write error:", err)
+	}
+}
+
+// GenerateSegwitAddress Generate segwit address using for the bitcoin mainnet by the public key
+func GenerateSegwitAddress(key *[]byte) (*string, error) {
+	witnessProg := btcutil.Hash160(*key)
+	addressWitnessPubKeyHash, err := btcutil.NewAddressWitnessPubKeyHash(witnessProg, &chaincfg.MainNetParams)
+	if err != nil {
+		return nil, err
+	}
+
+	segwitAddress := addressWitnessPubKeyHash.EncodeAddress()
+	return &segwitAddress, nil
+}
+
+// ConvertPublicKey Serialize the HD key struct to a compressed public key data represent by a byte array
+func ConvertPublicKey(key *hdkeychain.ExtendedKey) (*[]byte, error) {
+	ecPubKey, err := key.ECPubKey()
+	if err != nil {
+		return nil, err
+	}
+
+	compressed := ecPubKey.SerializeCompressed()
+	return &compressed, nil
+}
+
+// ServerErrorHandle Handle the response message when the error happens during the HTTP request processing
+func ServerErrorHandle(w http.ResponseWriter, e error, s string) {
+	log.Println(s, e)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+}
+
+// GenerateHDPublicKey Generate a bitcoin mainnet HD public key given the seed and path following by BIP032
+func GenerateHDPublicKey(p *BIP32PARAM) (*hdkeychain.ExtendedKey, error){
+	seed, err := hex.DecodeString(p.SEED)
+	if err != nil {
+		return nil, err
+	}
+
+	clientMasterKey, err := hdkeychain.NewMaster(seed, &chaincfg.MainNetParams)
+	Clear(&seed)
+	if err != nil {
+		return nil, err
+	}
+
+	accKey, err := clientMasterKey.Derive(hdkeychain.HardenedKeyStart + p.PATH.ACCOUNT)
+	Clear(&clientMasterKey)
+	if err != nil {
+		return nil, err
+	}
+
+	chainKey, err := accKey.Derive(p.PATH.CHAIN)
+	if err != nil {
+		return nil, err
+	}
+
+	addressKey, err := chainKey.Derive(p.PATH.ADDRESS)
+	if err != nil {
+		return nil, err
+	}
+
+	clientHDPubKey, err := addressKey.Neuter()
+	if err != nil {
+		return nil, err
+	}
+
+	return clientHDPubKey, nil
 }
 
