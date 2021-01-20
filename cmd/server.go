@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil/hdkeychain"
@@ -10,11 +11,18 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 func main() {
+	// the ctr + c signal event handle
+	handleCtrlC()
+
+	log.Println("The server is running...")
 
 	// Generate the key for the data encrypt/decrypt during the message passing
 	privKey, err := btcec.NewPrivateKey(btcec.S256())
@@ -49,6 +57,21 @@ func main() {
 	}
 }
 
+func handleCtrlC() {
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		shutdown()
+		os.Exit(1)
+	}()
+}
+
+func shutdown() {
+	fmt.Println()
+	log.Println("The server is terminated")
+}
+
 // PubKeyHandler the handler uses for passing this struct into the ServerHTTP function
 type PubKeyHandler struct {
 	pubKey *btcec.PublicKey
@@ -56,6 +79,7 @@ type PubKeyHandler struct {
 
 // ServeHTTP handle the V1/serverPublicKeys API request. Return the server public key for encrypting the client data
 func (ph *PubKeyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Println("Handle API /v1/serverPublicKeys")
 	resp := make(map[string]string)
 	resp["publicKey"] = hex.EncodeToString(ph.pubKey.SerializeCompressed())
 	jsonResp, err := json.Marshal(resp)
@@ -82,6 +106,7 @@ type PrivKeyHandler struct {
 // (See V1/serverPublicKeys API). This function decrypted the message by the server's private key, generate the HD key base on the
 // seed and the path and return the public key and the SegWit address encrypted by the client's public key.
 func (ph *PrivKeyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Println("Handle API /v1/genPublicKeyAndSegWitAddress")
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		ServerErrorHandle(w, err, "Read body error:")
@@ -217,7 +242,7 @@ func GenerateHDPublicKey(p *BIP32PARAM) (*hdkeychain.ExtendedKey, error){
 
 // HandleMultiSigP2SHAddress a handle function to genarate the n-out-of-m MultiSig P2SH bitcoin Address
 func GenMultiSigP2SHAddress(w http.ResponseWriter, r *http.Request)  {
-
+	log.Println("Handle API /v1/genMultiSigP2SHAddress")
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		ServerErrorHandle(w, err, "Read body error:")
