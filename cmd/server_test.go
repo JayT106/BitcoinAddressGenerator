@@ -65,7 +65,7 @@ func TestHTTPServerGenPublicKeyAndSegWitAddress(t *testing.T) {
 		t.Error(err)
 	}
 
-	var filePath = workingDir + "/test.json"
+	var filePath = workingDir + "/../test/test.json"
 	keyParam := ReadSeedFromJsonFile(&filePath)
 	marshalledData, err := json.Marshal(keyParam)
 	if err != nil {
