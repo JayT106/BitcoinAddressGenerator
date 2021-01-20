@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcutil/hdkeychain"
 	"github.com/jayt106/bitcoinAddressGenerator/cipher"
 	"io/ioutil"
@@ -172,28 +171,7 @@ func (ph *PrivKeyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GenerateSegwitAddress Generate segwit address using for the bitcoin mainnet by the public key
-func GenerateSegwitAddress(key *[]byte) (*string, error) {
-	witnessProg := btcutil.Hash160(*key)
-	addressWitnessPubKeyHash, err := btcutil.NewAddressWitnessPubKeyHash(witnessProg, &chaincfg.MainNetParams)
-	if err != nil {
-		return nil, err
-	}
 
-	segwitAddress := addressWitnessPubKeyHash.EncodeAddress()
-	return &segwitAddress, nil
-}
-
-// ConvertPublicKey Serialize the HD key struct to a compressed public key data represent by a byte array
-func ConvertPublicKey(key *hdkeychain.ExtendedKey) (*[]byte, error) {
-	ecPubKey, err := key.ECPubKey()
-	if err != nil {
-		return nil, err
-	}
-
-	compressed := ecPubKey.SerializeCompressed()
-	return &compressed, nil
-}
 
 // ServerErrorHandle Handle the response message when the error happens during the HTTP request processing
 func ServerErrorHandle(w http.ResponseWriter, e error, s string) {
