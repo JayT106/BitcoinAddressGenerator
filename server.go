@@ -11,6 +11,8 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 )
 
 func main() {
@@ -31,6 +33,9 @@ func main() {
 	//Handling the /v1/genPublicKeyAndSegWitAddress.
 	privkh := &PrivKeyHandler{privKey}
 	mux.Handle("/v1/genPublicKeyAndSegWitAddress", privkh)
+
+	//Handling the /v1/genMultiSigP2SH address
+	mux.HandleFunc("/v1/genMultiSigP2SHAddress", GenMultiSigP2SHAddress)
 
 	//Create the http server.
 	s := &http.Server{
@@ -234,3 +239,62 @@ func GenerateHDPublicKey(p *BIP32PARAM) (*hdkeychain.ExtendedKey, error){
 	return clientHDPubKey, nil
 }
 
+// HandleMultiSigP2SHAddress a handle function to genarate the n-out-of-m MultiSig P2SH bitcoin Address
+func GenMultiSigP2SHAddress(w http.ResponseWriter, r *http.Request)  {
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		ServerErrorHandle(w, err, "Read body error:")
+		return
+	}
+
+	var msgParam map[string]string
+	err = json.Unmarshal(body, &msgParam)
+	if err != nil {
+		ServerErrorHandle(w, err, "Json unmarshal error:")
+		return
+	}
+
+	n, err := strconv.ParseInt(msgParam["n"], 10, 32)
+	if err != nil {
+		ServerErrorHandle(w, err, "The argument n parsing error:")
+		return
+	}
+	m, err := strconv.ParseInt(msgParam["m"], 10, 32)
+	if err != nil {
+		ServerErrorHandle(w, err, "The argument m parsing error:")
+		return
+	}
+	publicKeys := msgParam["publicKeys"]
+
+	// the client input requirement is n-of-m multisig. Therefore, the order of the param for calling the following function
+	// need to be careful
+	P2SHAddress, redeemScriptHex, err := cipher.OutputAddress(int(n), int(m), publicKeys)
+
+	resp := make(map[string]string)
+	if err != nil {
+		errString := err.Error()
+		if !strings.Contains(errString, "WARNING:") {
+			ServerErrorHandle(w, err, "P2SH Address generating error:")
+			return
+		}
+		resp["warning"] = errString
+	}
+
+	resp["ps2hAddress"] = P2SHAddress
+	resp["redeemScriptHex"] = redeemScriptHex
+
+	marshalledData, err := json.Marshal(resp)
+	if err != nil {
+		log.Println("Json Marshal error:", err)
+		w.WriteHeader(500)
+	} else {
+		w.WriteHeader(200)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, err = w.Write(marshalledData)
+	if err != nil {
+		log.Println("ServeHTTP write error:", err)
+	}
+}

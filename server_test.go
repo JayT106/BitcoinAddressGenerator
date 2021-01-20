@@ -167,3 +167,49 @@ func ReadSeedFromJsonFile(file *string) *BIP32PARAM  {
 
 	return &obj
 }
+
+func TestHTTPServerGenMultiSigP2SHAddress(t *testing.T) {
+	data := make(map[string]string)
+	data["n"] = "2"
+	data["m"] = "3"
+	data["publicKeys"] = "04a882d414e478039cd5b52a92ffb13dd5e6bd4515497439dffd691a0f12af9575fa349b5694ed3155b136f09e63975a1700c9f4d4df849323dac06cf3bd6458cd,046ce31db9bdd543e72fe3039a1f1c047dab87037c36a669ff90e28da1848f640de68c2fe913d363a51154a0c62d7adea1b822d05035077418267b1a1379790187,0411ffd36c70776538d079fbae117dc38effafb33304af83ce4894589747aee1ef992f63280567f52f5ba870678b4ab4ff6c8ea600bd217870a8b4f1f09f3a8e83"
+	bytesData, err := json.Marshal(data)
+	if err != nil {
+		t.Error(err)
+	}
+
+	client := &http.Client{}
+	req, err := http.NewRequest("POST","http://localhost:8080/v1/genMultiSigP2SHAddress", bytes.NewReader(bytesData))
+	if err != nil {
+		t.Error(err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Error(err)
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Error(err)
+	}
+
+	var rsp map[string]string
+	err = json.Unmarshal(body, &rsp)
+	if err != nil {
+		t.Error(err)
+	}
+
+	P2SHAddress := rsp["ps2hAddress"]
+	redeemScriptHex := rsp["redeemScriptHex"]
+
+	testAddress := "347N1Thc213QqfYCz3PZkjoJpNv5b14kBd"
+	testRedeemScriptHex := "524104a882d414e478039cd5b52a92ffb13dd5e6bd4515497439dffd691a0f12af9575fa349b5694ed3155b136f09e63975a1700c9f4d4df849323dac06cf3bd6458cd41046ce31db9bdd543e72fe3039a1f1c047dab87037c36a669ff90e28da1848f640de68c2fe913d363a51154a0c62d7adea1b822d05035077418267b1a1379790187410411ffd36c70776538d079fbae117dc38effafb33304af83ce4894589747aee1ef992f63280567f52f5ba870678b4ab4ff6c8ea600bd217870a8b4f1f09f3a8e8353ae"
+	if testAddress != P2SHAddress {
+		t.Error(t, "Generated P2SH address different from expected address.", testAddress, P2SHAddress)
+	}
+	if testRedeemScriptHex != redeemScriptHex {
+		t.Error(t, "Generated P2SH address different from expected address.", testRedeemScriptHex, redeemScriptHex)
+	}
+}
