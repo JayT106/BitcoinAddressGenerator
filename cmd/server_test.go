@@ -9,25 +9,25 @@ import (
 	"github.com/jayt106/bitcoinAddressGenerator/cipher"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 )
 
-func TestHTTPServerGetServerPublicKeys(t *testing.T) {
-	_, err := GetServerPublicKey()
-	if err != nil {
-		t.Error(err)
-	}
-}
+var privKey, _ = btcec.NewPrivateKey(btcec.S256())
 
 func GetServerPublicKey() (*btcec.PublicKey, error) {
-	resp, err := http.Get("http://localhost:8080/v1/serverPublicKeys")
+	pubkh := &PubKeyHandler{privKey.PubKey()}
+	resp, err := http.NewRequest("GET", "v1/serverPublicKeys", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	rr := httptest.NewRecorder()
+	http.Handle("/v1/serverPublicKeys", pubkh)
+	pubkh.ServeHTTP(rr, resp)
+
+	body, err := ioutil.ReadAll(rr.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -92,19 +92,17 @@ func TestHTTPServerGenPublicKeyAndSegWitAddress(t *testing.T) {
 		t.Error(err)
 	}
 
-	client := &http.Client{}
-	req, err := http.NewRequest("POST","http://localhost:8080/v1/genPublicKeyAndSegWitAddress", bytes.NewReader(bytesData))
+	req, err := http.NewRequest("POST","v1/genPublicKeyAndSegWitAddress", bytes.NewReader(bytesData))
 	if err != nil {
 		t.Error(err)
 	}
 
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Error(err)
-	}
+	privkh := &PrivKeyHandler{privKey}
+	http.Handle("v1/genPublicKeyAndSegWitAddress", privkh)
+	rr := httptest.NewRecorder()
+	privkh.ServeHTTP(rr, req)
 
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(rr.Body)
 	if err != nil {
 		t.Error(err)
 	}
@@ -178,19 +176,16 @@ func TestHTTPServerGenMultiSigP2SHAddress(t *testing.T) {
 		t.Error(err)
 	}
 
-	client := &http.Client{}
-	req, err := http.NewRequest("POST","http://localhost:8080/v1/genMultiSigP2SHAddress", bytes.NewReader(bytesData))
+	req, err := http.NewRequest("POST","/v1/genMultiSigP2SHAddress", bytes.NewReader(bytesData))
 	if err != nil {
 		t.Error(err)
 	}
 
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Error(err)
-	}
+	rr := httptest.NewRecorder()
+	http.HandleFunc("v1/genMultiSigP2SHAddress", GenMultiSigP2SHAddress)
+	GenMultiSigP2SHAddress(rr, req)
 
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(rr.Body)
 	if err != nil {
 		t.Error(err)
 	}

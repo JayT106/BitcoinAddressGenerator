@@ -171,8 +171,6 @@ func (ph *PrivKeyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
-
 // ServerErrorHandle Handle the response message when the error happens during the HTTP request processing
 func ServerErrorHandle(w http.ResponseWriter, e error, s string) {
 	log.Println(s, e)
