@@ -20,6 +20,7 @@ OUTPUT_DIR := bin
 EXAMPLE_DIR := example
 
 build: # @HELP build binary
+	go get -d ./...    #To get the dependency pkg for this project. It might take a few seconds if you are the first time to build the project
 	go build -o $(OUTPUT_DIR)/$(BIN)-$(TAG) $(SRC_DIRS)/server.go $(SRC_DIRS)/struct.go
 	go build -o $(EXAMPLE_DIR)/$(TOOL) $(SRC_DIRS)/genPublicKeyAndSegWitAddress.go $(SRC_DIRS)/struct.go
 
