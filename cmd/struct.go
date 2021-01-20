@@ -1,9 +1,12 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/btcutil/hdkeychain"
+	"io/ioutil"
 	"reflect"
 )
 
@@ -45,4 +48,21 @@ func ConvertPublicKey(key *hdkeychain.ExtendedKey) (*[]byte, error) {
 
 	compressed := ecPubKey.SerializeCompressed()
 	return &compressed, nil
+}
+
+// ReadSeedFromJsonFile a helper function to read the json file to a BIP32PARAM instance
+func ReadSeedFromJsonFile(file *string) (*BIP32PARAM, error)  {
+	data, err := ioutil.ReadFile(*file)
+	if err != nil {
+		fmt.Println("File reading error", err)
+		return nil, err
+	}
+
+	obj := BIP32PARAM{}
+	err = json.Unmarshal(data, &obj)
+	if err != nil {
+		return nil, err
+	}
+
+	return &obj, nil
 }

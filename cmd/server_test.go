@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/jayt106/bitcoinAddressGenerator/cipher"
 	"io/ioutil"
@@ -66,7 +65,11 @@ func TestHTTPServerGenPublicKeyAndSegWitAddress(t *testing.T) {
 	}
 
 	var filePath = workingDir + "/../test/test.json"
-	keyParam := ReadSeedFromJsonFile(&filePath)
+	keyParam, err := ReadSeedFromJsonFile(&filePath)
+	if err != nil {
+		t.Error(err)
+	}
+
 	marshalledData, err := json.Marshal(keyParam)
 	if err != nil {
 		t.Error(err)
@@ -146,24 +149,6 @@ func TestGenerateSegwitAddress(t *testing.T) {
 	if *segwitAddress != "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4" {
 		t.Error("Unmatched segwit address")
 	}
-}
-
-// ReadSeedFromJsonFile a helper function to read the json file to a BIP32PARAM instance
-func ReadSeedFromJsonFile(file *string) *BIP32PARAM  {
-	data, err := ioutil.ReadFile(*file)
-	if err != nil {
-		fmt.Println("File reading error", err)
-		return nil
-	}
-
-	obj := BIP32PARAM{}
-	err = json.Unmarshal(data, &obj)
-	if err != nil {
-		fmt.Println("Json object unmarshal error", err)
-		return nil
-	}
-
-	return &obj
 }
 
 func TestHTTPServerGenMultiSigP2SHAddress(t *testing.T) {
