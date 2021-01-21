@@ -138,8 +138,8 @@ func main() {
 }
 
 func help() {
-	fmt.Println("usage: ./clientTool [ip] [port] [server public key] [seed file path]")
+	fmt.Println("usage: ./genPublicKeyAndSegWitAddress [ip] [port] [server public key] [seed file path]")
 	fmt.Println()
 	fmt.Println("For connecting with the default server: localhost:8080")
-	fmt.Println("usage: ./clientTool [server public key] [seed file path]")
+	fmt.Println("usage: ./genPublicKeyAndSegWitAddress [server public key] [seed file path]")
 }
